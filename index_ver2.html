@@ -1,0 +1,645 @@
+<html>
+<head>
+	<meta charset="utf-8">
+	<script src="http://d3js.org/d3.v3.min.js"></script>
+	<style>
+	    header {
+          position: fixed;
+          top:5px;
+          left: 50%;
+          line-height:5px;
+          margin-right: -50%;
+          transform: translate(-50%, -50%)
+          color: black;
+           text-align: center;
+      }
+      nav {
+          margin-top: 20px;
+          line-height:20px;
+          background-color:#eeeeee;
+          height:600px;
+          width:150px;
+          float:left;
+          padding:5px;
+          overflow:hidden;
+      }
+      section {
+          margin-top: 20px;
+          margin-left:170px;
+          width:1100px;
+          padding:5px; 
+      }
+      .legend {
+          padding: 5px;
+          font: 12px Times;
+          border: 1px solid black;
+      }
+      input[type='radio'] {
+          float:left;
+      }
+      footer{
+          margin-left: 200px;
+          font: 11px Times;
+          font-weight:bold;
+      }
+	</style>
+  <script type="text/javascript">
+ 	    function draw(baseball_data) {
+	        "use strict";
+	        var margin = 75,
+		      width = 1100 - margin,
+		      hgt = 500 - margin;
+          var multiplier = 2;
+          var x_scale,
+          y_scale,
+          x_label,
+          y_label,
+          x_axis,
+          y_axis;
+          var legendarray = ["Left_Handed", "Right_Handed", "Both_Handed"];
+          var interval1, interval2;
+          d3.select("header")
+		        .append("h2")
+		        .text("Base Ball Batting analysis");
+          d3.select("header")
+            .append("h3")
+            .text("(Height Vs Batting Average)"); 
+        	var svg = d3.select("section")
+				              .append("svg")
+				              .attr("width",width + margin)
+				              .attr("height",hgt + margin)
+				              .append("g")
+				              .attr("class","chart");
+          var legend = svg.append("g")
+                      .attr("class", "legend")
+                      .attr("transform", "translate(" + (width - 50) + "," + 20 + ")")
+                      .selectAll("g")
+                      .data(legendarray)
+                      .enter().append("g");
+          legend.append("rect")
+                .attr("x", 2)
+                .attr("y", function(d, i) {
+                    return i * 30;
+                })
+                .attr("width", 10)
+                .attr("height",10)
+                .attr("fill", function(d) {
+                    if (d == "Left_Handed") {
+                        return 'Orange';
+                    }
+                    if (d == "Right_Handed") {
+                        return 'blue';
+                    }
+                    if (d == "Both_Handed") {
+                        return 'grey';
+                    }
+                });
+          legend.append("text")
+                .attr("y", function(d, i) {
+                    return i * 30 + 10;
+                })
+                .attr("x", 15)
+                .text(function(d) {
+                    return d;
+                });
+          function get_resultset(criteria1){
+	           function agg_data(leaves) {
+                var batting_avg = d3.mean(leaves, function(d) {
+                    return d['avg'];
+                });
+                var home_run_avg = d3.mean(leaves,function(d) {
+                	return d['HR'];
+                });
+                var count = d3.sum(leaves,function(d) {
+                  return 1;
+                });
+                return {
+                  'batting_average' : batting_avg,
+                  'avg_home_run' : home_run_avg,
+                  'count' : count
+                };
+            }
+            var nested = d3.nest()
+                           .key(function(d) {
+                              if (criteria1 === 'Height'){
+                                return +d['height'];  
+                              }
+                              if (criteria1 === 'Weight'){
+                                return Math.floor(d['weight'] /10) * 10;  
+                              }
+                              	
+                           })
+                           .key(function(d) {
+                           		return d['handedness'];
+                           })
+                           .rollup(agg_data)
+                           .map(baseball_data);
+			      var lvl = 1;
+			      var result_set = [];
+            function toArray(obj,lvl ,height_weight) {
+                for (var prop in obj) {
+	                 var value = obj[prop];
+	                 if (typeof value === 'object')	{
+		                  if ( lvl === 1 ) {
+		                      height_weight = prop;
+		                  }
+		                  if (lvl === 2 ) {
+		                      var myobj = new Object;
+		                      if (criteria1 === 'Height'){
+                              myobj['height'] = height_weight;  
+                          }
+                          if (criteria1 === 'Weight'){
+		                          myobj['weight'] = height_weight;  
+                          }
+                          myobj['handedness'] = prop;
+		                      myobj['batting_average'] = value['batting_average'];
+		                      myobj['avg_home_run'] = value['avg_home_run'];
+                          myobj['count'] = value['count'];
+		                      result_set.push(myobj);
+		                      lvl = 2;
+		                  }
+		                  if ( lvl >= 1 && lvl <= 2 )	{
+			                   toArray(obj[prop],lvl+1,height_weight);
+		                  }
+	                 }
+	              }
+	          }
+			      toArray(nested,1); 
+            return result_set;
+          }
+          var result = [];
+          function tick_count(result, criteria1) {
+              var extnt = d3.extent(result,function(d){
+                  if (criteria1 === 'Height') {
+                      return d['height'];  
+                  }
+                  if (criteria1 === 'Weight') {
+                      return d['weight'];  
+                  }
+              });
+              var min = d3.min(extnt);
+              var max = d3.max(extnt);
+              var tick_cnt = max - min;
+              return tick_cnt;
+          }
+          function get_x_scale(result,criteria1) {
+                if (criteria1 === 'Height') {
+                    var x_extent = d3.extent(result, function(d) {
+                        return d['height'];  
+                    });
+                }
+                if (criteria1 === 'Weight')
+                {
+                    var x_extent = d3.extent(result, function(d) {
+                        return d['weight'];  
+                    });
+                }
+                var x_scale = d3.scale.linear()
+                                      .range([margin, width])
+                                      .domain(x_extent);            
+                return x_scale;
+          }
+          function get_y_scale(result,criteria1) {
+                if (criteria1 === 'Batting_avg') {
+                    var y_extent = d3.extent(result, function(d) {
+                        return d['batting_average'];
+                    });
+                }
+                if (criteria1 === 'count') {
+                    var y_extent = d3.extent(result, function(d) {
+                        return d['count'];
+                    });
+                }
+                var y_scale = d3.scale.linear()
+                                      .range([hgt, margin])
+                                      .domain(y_extent);
+                return y_scale;
+          }   
+          function get_x_label(criteria1) {
+                if(criteria1 === 'Height'){
+                    return 'Height (Inches)';
+                }
+                if(criteria1 === 'Weight'){
+                    return 'Weight (Pounds)';
+                }
+          }
+          function get_y_label(criteria1) {
+                if(criteria1 === 'Batting_avg'){
+                    return 'Batting Average';
+                }
+                if(criteria1 === 'count'){
+                    return 'Count of Players';
+                }
+          }
+          d3.select("svg")
+            .append('g')
+            .attr('class', 'x-axis')
+            .attr('transform', "translate(0," + hgt + ")");
+          d3.select("svg")
+            .append('g')
+            .attr('class', 'y-axis')
+            .attr('transform', "translate(" + margin + ",0)");
+          d3.select("svg")
+            .append("text")
+            .attr('class', 'x-label')
+            .attr("text-anchor","center")
+            .attr("x",width /2 )
+            .attr("y", hgt + 40);
+          d3.select("svg")
+            .append("text")
+            .attr('class', 'y-label')
+            .attr("text-anchor","center")
+            .attr("x",-350 )
+            .attr("y", 30)
+            .attr("transform", "rotate(-90)");
+          d3.select("svg")
+            .append("text")
+            .attr('class', 'y-label')
+            .attr("text-anchor","center")
+            .attr("x",-350 )
+            .attr("y", 30)
+            .attr("transform", "rotate(-90)");
+          function refresh_scale_axis(result,criteria1,criteria2) {
+              x_scale = get_x_scale(result,criteria1);
+              y_scale = get_y_scale(result,criteria2);    
+              x_label = get_x_label(criteria1);
+              y_label = get_y_label(criteria2);
+              var no_of_ticks = tick_count(result, criteria1);    
+              if (criteria1 === 'Weight') {
+                  no_of_ticks = no_of_ticks / 10;
+              }
+              x_axis = d3.svg.axis()
+              .scale(x_scale)
+              .ticks(no_of_ticks); 
+              d3.select("g.x-axis")
+                .call(x_axis);
+              y_axis = d3.svg.axis()
+                .scale(y_scale)
+                .orient("left");
+              d3.select("g.y-axis")
+                .call(y_axis);
+              d3.select("text.x-label")
+                .text(x_label);
+              d3.select("text.y-label")
+                .text(y_label);
+          }
+          function render(criteria1, criteria2,criteria3,criteria4) {
+              var avg_hr_max = d3.max(result, function(d) {
+                  return d['avg_home_run'];
+              });         
+              var radius = d3.scale.sqrt()
+                             .domain([0, avg_hr_max])
+                             .range([0, 15]);
+              var filtered = result.filter(function(d) {
+                  if (criteria3 === 'Height'){
+                      return d['height'] === criteria1 && d['handedness'] === criteria2;
+                  }
+                  if (criteria3 === 'Weight'){
+                      return d['weight'] === criteria1 && d['handedness'] === criteria2;
+                  }
+              });
+              if (criteria3 === 'Height') {
+                  var circles = svg.selectAll('circle')
+                                   .data(filtered,function(d) {
+                                        if (d['height'] === criteria1 && d['handedness'] === criteria2) {
+                                            return d
+                                        }
+                                    }); 
+              }
+              if (criteria3 === 'Weight') {
+                  var circles = svg.selectAll('circle')
+                                   .data(filtered,function(d) {
+                                        if (d['weight'] === criteria1 && d['handedness'] === criteria2) {
+                                              return d
+                                          }
+                                    });  
+              }
+              circles.enter()
+                     .append("circle")
+                     .transition()
+                     .duration(100)
+                     .attr('cx', function(d) {
+                        if (criteria3==='Height') {
+                            return x_scale(d['height']);
+                        }
+                        if (criteria3==='Weight'){
+                            return x_scale(d['weight']);
+                        }
+                     })
+                     .attr('cy', function(d) {
+                        if (criteria4 === 'Batting_avg'){
+                            return y_scale(0.0001 + d['batting_average']);  
+                        }
+                        if (criteria4 === 'count'){
+                            return y_scale(d['count']); 
+                        }
+                     })
+                     .attr('r', function(d) {
+                        if (radius(d['avg_home_run']) === 0) {
+                            return multiplier;
+                        } 
+                        else {
+                            return  ((1 + radius(d['avg_home_run'])) * multiplier);
+                        }
+                     }) 
+                   .attr('fill', function(d) {
+                      if (d['handedness'] === 'L') {
+                          return 'orange'
+                      } 
+                      if (d['handedness'] === 'R') {
+                        return 'blue';
+                      }
+                      if (d['handedness'] === 'B') {
+                        return 'grey';
+                      }
+                   });
+              circles.append("svg:title")
+                     .text(function(d) {
+                          return "Avg HR:"+ parseFloat(d.avg_home_run,2).toFixed(2)+"\nCount:"+d.count;});
+                      }
+          function main(criteria1,criteria2,criteria3) {
+              var idx = 0;
+              var inc = 0;
+              var max_idx = 0;  
+              if (criteria1 === 'Height') {
+                  result=get_resultset("Height");
+                  var min_height = d3.min(result, function(d) {
+                      return d['height'];
+                  });
+                  var max_height = d3.max(result, function(d) {
+                      return d['height'];
+                  });
+                  idx = +min_height;
+                  inc = 1;
+                  max_idx = +max_height;
+              }
+              if (criteria1 === 'Weight') {
+                  result=get_resultset("Weight"); 
+                  var min_weight = d3.min(result, function(d) {
+                      return d['weight'];
+                  });
+                  var max_weight = d3.max(result, function(d) {
+                      return d['weight'];
+                  });
+                  idx = +min_weight;
+                  inc = 10;
+                  max_idx = +max_weight;
+              }
+              refresh_scale_axis(result,criteria1,criteria2);
+              if (criteria1 === 'Weight' && criteria2 === 'Batting_avg'){
+                d3.select("h3")
+                .text("(Batting Average vs Weight)");  
+              }
+              if (criteria1 === 'Height' && criteria2 === 'Batting_avg'){
+                d3.select("h3")
+                .text("(Batting Average vs Height)");  
+              }
+              if (criteria1 === 'Weight' && criteria2 === 'count'){
+                d3.select("h3")
+                .text("(Count of Players vs Weight)");  
+              }
+              if (criteria1 === 'Height' && criteria2 === 'count'){
+                d3.select("h3")
+                .text("(Count of Players vs Height)");  
+              }
+              var handedness = [];
+              if (criteria3 === 'Left') {
+                  handedness = ['L'];
+              }
+              if (criteria3 === 'Right') {
+                  handedness = ['R'];
+              }
+              if (criteria3 === 'Both') {
+                  handedness = ['B'];
+              }
+              if (criteria3 === 'All') {
+                  handedness = ['L','R','B'];
+              }
+              
+              var ref_idx = idx;
+              var semaphr = 1;
+              var ctr = handedness.length;
+              var i = 0;
+              function animation1(animate2) {
+                  interval1 = setInterval(function() {
+                      if (semaphr === 1) {
+                          semaphr = 0;
+                          idx = ref_idx;
+                          animate2(handedness[i]);
+                          i = i + 1;  
+                      }
+                      if ( i >= ctr){
+                          clearInterval(interval1);
+                      }
+                  },400);
+              }
+              function animation2(handed) {
+                  interval2 = setInterval(function() {
+                      render(idx.toString(), handed,criteria1,criteria2);
+                      idx = idx + inc;
+                      if(idx > max_idx) {
+                          clearInterval(interval2);
+                          semaphr = 1;
+                          
+                      }
+                  },200 );
+              }
+              function start_animation() {
+                  animation1(animation2);
+              }                
+              start_animation();
+          }
+          var div_form = d3.select("nav")
+                           .append("div")
+                           .attr("class","form_data");
+          var form = d3.select("nav")
+                       .select("div")
+                       .append("form")
+                       .attr("id", "input_data");
+          d3.select("nav")
+            .select("#input_data")
+            .append("label")
+            .attr("for","Y_Axis")
+            .text("Select Y-Axis");
+          d3.select("nav")
+            .select("#input_data")
+            .append("br");
+          d3.select("nav")
+            .select("#input_data")
+            .append("label")
+            .text("Batting Average")
+            .insert("input")
+            .attr("type","radio")
+            .attr("name","radio_y_axis")
+            .attr("value", "Batting_avg")
+            .property("checked","True");
+          d3.select("nav")
+            .select("#input_data")
+            .append("br");
+          d3.select("nav")
+            .select("#input_data")
+            .append("label")
+            .text("Count of Players")
+            .insert("input")
+            .attr("type","radio")
+            .attr("name","radio_y_axis")
+            .attr("value", "count");
+          d3.select("nav")
+            .select("#input_data")
+            .append("br")
+            .append("br");
+          d3.select("nav")
+            .select("#input_data")
+            .append("label")
+            .attr("for","X_Axis")
+            .text("Select X-Axis")
+            .append("br");
+          d3.select("nav")
+            .select("#input_data")
+            .append("label")
+            .text("Height")
+            .insert("input")
+            .attr("type","radio")
+            .attr("name","radio_x_axis")
+            .attr("value", "Height")
+            .property("checked","True");
+          d3.select("nav")
+            .select("#input_data")
+            .append("br");
+          d3.select("nav")
+            .select("#input_data")
+            .append("label")
+            .text("Weight")
+            .insert("input")
+            .attr("type","radio")
+            .attr("name","radio_x_axis")
+            .attr("value", "Weight");
+          d3.select("nav")
+            .select("#input_data")
+            .append("br")
+            .append("br");
+          d3.select("nav")
+            .select("#input_data")
+            .append("label")
+            .attr("for","select_cat")
+            .text("Select Handedness");
+          d3.select("nav")
+            .select("#input_data")
+            .append("br");
+          d3.select("nav")
+            .select("#input_data")
+            .append("select")
+            .attr("name","select_value")
+            .attr("id","select_cat");
+          d3.select("nav")
+            .select("#select_cat")
+            .append("option")
+            .attr("value","All")
+            .text("All");
+          d3.select("nav")
+            .select("#select_cat")
+            .append("option")
+            .attr("value","Left")
+            .text("Left-Handed");
+          d3.select("nav")
+            .select("#select_cat")
+            .append("option")
+            .attr("value","Right")
+            .text("Right-Handed");
+          d3.select("nav")
+            .select("#select_cat")
+            .append("option")
+            .attr("value","Both")
+            .text("Both-Handed");
+          d3.select("nav")
+            .select("#select_cat")
+            .property("value","All");
+                    
+          function change_event() {
+                  var radios_y = document.getElementsByName("radio_y_axis");
+                  var y_axis_value = ' ';
+                  var x_axis_value = ' ';
+                  for (var i = 0, length = radios_y.length; i < length; i++) {
+                      if (radios_y[i].checked) {
+                          y_axis_value = radios_y[i].value;
+                          break;
+                      }
+                  }
+                  var radios_x = document.getElementsByName("radio_x_axis");
+                  for (var i = 0, length = radios_x.length; i < length; i++) {
+                      if (radios_x[i].checked) {
+                          x_axis_value = radios_x[i].value;
+                          break;
+                      }
+                  }      
+                  var e = document.getElementById("select_cat");
+                  var cat = e.options[e.selectedIndex].value;     
+                  d3.selectAll("circle")
+                    .remove();
+                  main(x_axis_value, y_axis_value, cat);
+              }
+          var rad_x = document.getElementsByName("radio_x_axis");
+          for(var i = 0; i < rad_x.length; i++) {
+              rad_x[i].onclick = function() {
+              clearInterval(interval1);
+              clearInterval(interval2);
+              change_event();
+              };
+          }
+          var rad_y = document.getElementsByName("radio_y_axis");
+          for(var i = 0; i < rad_y.length; i++) {
+              rad_y[i].onclick = function() {
+              clearInterval(interval1);
+              clearInterval(interval2);
+              change_event();
+              };
+          }
+          var e = document.getElementById("select_cat");
+          e.onchange= function() {
+              clearInterval(interval1);
+              clearInterval(interval2);
+              change_event();
+          }
+          main('Height','Batting_avg',"All");
+      }
+	</script>
+</head>
+<body>
+	<script type="text/javascript">
+		d3.csv("baseball_data.csv",draw);
+	</script>
+  <header>
+  </header>
+  <nav>
+  </nav>
+  <section>
+  </section>
+  <footer>
+  <p>
+  * The Size of the circle denotes the Average Career Home Run for the particular Height / Weight on the X-Axis
+  <br>
+  ** The Y-axis has been elevated by 0.0001 for the batting average so that the batting average of zero becomes visible above the X-axis just touching the axis on the top
+  <br>
+  *** The radius of each circle is arrived by multiplying the Home Run by a factor of 2 and then by adding 1. The 1 has been added so the point gets plotted when the Home Run is zero
+  <br>
+  </p>
+  <p>
+  Dataset Used for this Visualization: 
+  <ol>
+    <li>
+      The <a  href="http://www.seanlahman.com/baseball-archive/statistics/" onclick="window.open(this.href, '_blank', 'width=500,height=400'); return false;"> Lahman Baseball Database </a> of MLB players has been used to construct the <a href="https://docs.google.com/document/d/1w7KhqotVi5eoKE3I_AZHbsxdr-NmcWsLTIiZrpxWx4w/pub?embedded=true" onclick="window.open(this.href, '_blank', 'width=500,height=400'); return false;"> cleaned dataset </a> of "Baseball Data" used for this Visualization
+    </li>
+    <li>
+      The cleaned dataset contains a subset of players who stopped playing before the year 1994
+    </li>
+    <li>
+      The Lahman Baseball Database contains 13238 players who stopped playing before the year 1994
+    </li>
+    <li>
+      Assumption: The cleaned dataset has been derived by doing a random sampling of 1157 players from the 13238 players who stopped playing before the year 1994
+    </li>
+  </ol>
+  </p>
+  </footer>
+</body>
+</html>
